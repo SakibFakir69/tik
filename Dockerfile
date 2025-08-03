@@ -1,8 +1,10 @@
+
+
 FROM node:18
 
-# Install Python, pip, ffmpeg, and yt-dlp
-RUN apt-get update && apt-get install -y python3 python3-pip ffmpeg
-RUN pip3 install yt-dlp
+# Install Python, pip, ffmpeg, and yt-dlp with error handling
+RUN apt-get update && apt-get install -y python3 python3-pip ffmpeg && \
+    pip3 install --no-cache-dir --break-system-packages yt-dlp
 
 # Set working directory
 WORKDIR /app
