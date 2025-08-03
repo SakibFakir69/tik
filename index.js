@@ -1,34 +1,26 @@
-const express = require("express");
-const { exec } = require("child_process");
-const path = require("path");
-const fs = require("fs");
-const app = express();
+const path = require('path');
+const { exec, execSync } = require('child_process');
+const fs = require('fs');
 
-app.use(express.json());
+const ytdlpPath = path.join(__dirname, 'yt-dlp');
 
-app.post("/api/download-tiktok", async (req, res) => {
-  const { url } = req.body;
+try {
+  execSync(`chmod +x ${ytdlpPath}`);
+} catch (err) {
+  console.warn('Failed to chmod yt-dlp');
+}
 
-  if (!url || !url.includes("tiktok.com")) {
-    return res.status(400).json({ error: "❌ Valid TikTok URL required." });
+// Create downloads folder if missing
+if (!fs.existsSync('downloads')) {
+  fs.mkdirSync('downloads');
+}
+
+const cmd = `${ytdlpPath} -o "downloads/%(title)s.%(ext)s" "https://vt.tiktok.com/ZSBJkHPeG/"`;
+
+exec(cmd, (error, stdout, stderr) => {
+  if (error) {
+    console.error('yt-dlp error:', error.message);
+  } else {
+    console.log('yt-dlp output:', stdout);
   }
-
-  const outputPath = "downloads/%(title)s.%(ext)s";
-  const cmd = `yt-dlp -o "${outputPath}" "${url}"`;
-
-  exec(cmd, (err, stdout, stderr) => {
-    if (err) {
-      console.error("yt-dlp error:", err.message);
-      return res.status(500).json({ error: "Download failed." });
-    }
-
-    console.log("yt-dlp output:", stdout);
-    return res.json({
-      message: "✅ Download triggered",
-    });
-  });
-});
-
-app.listen(3000, () => {
-  console.log("🚀 Server running on http://localhost:3000");
 });
