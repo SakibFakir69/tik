@@ -3,8 +3,12 @@ const { exec } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const app = express();
-
+const cors = require("cors")
 app.use(express.json());
+
+app.use(cors({
+  origin:"http://localhost:5173"
+}))
 
 app.post("/api/download-tiktok", async (req, res) => {
   const { url } = req.body;
