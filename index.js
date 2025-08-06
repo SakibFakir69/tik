@@ -7,12 +7,16 @@ const cors = require("cors")
 app.use(express.json());
 
 app.use(cors({
-  origin:"http://localhost:5173"
+  origin:["http://localhost:5173","https://marvelous-dusk-b0bc58.netlify.app"]
 }))
 
 app.post("/api/download-tiktok", async (req, res) => {
+  const data  = req.body;
+  console.log(data);
+
   const { url } = req.body;
 
+console.log(url, " url ")
   if (!url || !url.includes("tiktok.com")) {
     return res.status(400).json({ error: "❌ Valid TikTok URL required." });
   }
@@ -34,7 +38,10 @@ app.post("/api/download-tiktok", async (req, res) => {
     console.log("yt-dlp output:", stdout);
     return res.json({
       message: "✅ Download triggered",
-      output: stdout
+      output: stdout,
+      success:true,
+
+
     });
   });
 });
