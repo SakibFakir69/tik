@@ -43,6 +43,10 @@ app.get("/api/check-yt-dlp", (req, res) => {
   });
 });
 
+app.get('/', async (req , res)=>{
+  res.send("server running")
+})
+
 app.listen(3000, () => {
   console.log("🚀 Server running on http://localhost:3000");
 });
