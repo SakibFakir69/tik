@@ -17,6 +17,14 @@ if (!fs.existsSync(DOWNLOAD_DIR)) {
   fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 }
 
+// Sanitize filename to avoid multiple dots and special chars
+function sanitizeFilename(name) {
+  return name
+    .replace(/\.+/g, '_')               // Replace one or more dots with underscore
+    .replace(/[^\w\-]+/g, '_')          // Replace non-word chars except dash with underscore
+    .substring(0, 100);                 // Limit length to 100 chars
+}
+
 // TikTok download endpoint
 app.post("/api/download-tiktok", (req, res) => {
   const { url } = req.body;
@@ -39,55 +47,44 @@ app.post("/api/download-tiktok", (req, res) => {
       return res.status(500).json({ error: "Download failed.", details: err.message });
     }
 
-    // Get the most recently downloaded file
     const files = fs.readdirSync(DOWNLOAD_DIR);
     if (files.length === 0) {
       return res.status(500).json({ error: "No file was downloaded." });
     }
 
-    // Assuming only one file downloaded
-    const fileName = files[0];
-    const downloadUrl = `/video/${fileName}`;
+    let originalFile = files[0];
+    const ext = path.extname(originalFile);
+    const baseName = path.basename(originalFile, ext);
+    const safeBaseName = sanitizeFilename(baseName);
+    const safeFilename = safeBaseName + ext;
+
+    // Rename if needed
+    if (originalFile !== safeFilename) {
+      fs.renameSync(path.join(DOWNLOAD_DIR, originalFile), path.join(DOWNLOAD_DIR, safeFilename));
+    }
+
+    const downloadUrl = `/video/${encodeURIComponent(safeFilename)}`;
     res.json({
       success: true,
       message: "✅ Download complete",
-      filename: fileName,
-      downloadUrl: downloadUrl,
-      title: path.parse(fileName).name
+      filename: safeFilename,
+      downloadUrl,
+      title: safeBaseName,
     });
   });
 });
 
-// // Serve downloaded videos
-// app.use('/video', express.static(DOWNLOAD_DIR));
-
-// // Check yt-dlp version
-// app.get("/api/check-yt-dlp", (req, res) => {
-
-//   exec("yt-dlp --version", (err, stdout, stderr) => {
-//     if (err) return res.status(500).json({ error: "yt-dlp not found", details: stderr });
-//     res.json({ version: stdout.trim() });
-//   });
-// });
-
-// Remove or comment out this:
-// app.use('/video', express.static(DOWNLOAD_DIR));
-
-// Instead, add this route to force download:
-
+// Force download route with security
 app.get('/video/:filename', (req, res) => {
   const filename = req.params.filename;
-  
-  // Security: sanitize filename to avoid directory traversal
-  const safeFilename = path.basename(filename);
+
+  const safeFilename = path.basename(filename); // prevent directory traversal
   const filePath = path.join(DOWNLOAD_DIR, safeFilename);
 
-  // Check if file exists
   if (!fs.existsSync(filePath)) {
     return res.status(404).send('File not found');
   }
 
-  // Use res.download to force download
   res.download(filePath, safeFilename, (err) => {
     if (err) {
       console.error('Error sending file:', err);
@@ -95,8 +92,6 @@ app.get('/video/:filename', (req, res) => {
     }
   });
 });
-
-
 
 // Health check
 app.get("/", (req, res) => {
