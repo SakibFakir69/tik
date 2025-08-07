@@ -2,62 +2,79 @@ const express = require("express");
 const { exec } = require("child_process");
 const path = require("path");
 const fs = require("fs");
+const cors = require("cors");
+
 const app = express();
-const cors = require("cors")
 app.use(express.json());
 
+// CORS for local + Netlify
 app.use(cors({
-  origin:["http://localhost:5173","https://marvelous-dusk-b0bc58.netlify.app"]
-}))
+  origin: ["http://localhost:5173", "https://marvelous-dusk-b0bc58.netlify.app"]
+}));
 
-app.post("/api/download-tiktok", async (req, res) => {
-  const data  = req.body;
-  console.log(data);
+const DOWNLOAD_DIR = path.join(__dirname, "downloads");
+if (!fs.existsSync(DOWNLOAD_DIR)) {
+  fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
+}
 
+// TikTok download endpoint
+app.post("/api/download-tiktok", (req, res) => {
   const { url } = req.body;
 
-console.log(url, " url ")
   if (!url || !url.includes("tiktok.com")) {
     return res.status(400).json({ error: "❌ Valid TikTok URL required." });
   }
 
-  const downloadDir = path.join(__dirname, "downloads");
-  if (!fs.existsSync(downloadDir)) {
-    fs.mkdirSync(downloadDir, { recursive: true });
+  // Clean up old files (optional)
+  const existingFiles = fs.readdirSync(DOWNLOAD_DIR);
+  for (const file of existingFiles) {
+    fs.unlinkSync(path.join(DOWNLOAD_DIR, file));
   }
 
-  const outputPath = path.join(downloadDir, "%(title)s.%(ext)s");
-  const cmd = `yt-dlp -o "${outputPath}" "${url}"`;
+  const cmd = `yt-dlp -o "${DOWNLOAD_DIR}/%(title)s.%(ext)s" --restrict-filenames --no-playlist "${url}"`;
 
   exec(cmd, (err, stdout, stderr) => {
     if (err) {
       console.error("yt-dlp error:", err.message, stderr);
-      return res.status(500).json({ error: "Download failed.", details: err.message + " " + stderr });
+      return res.status(500).json({ error: "Download failed.", details: err.message });
     }
 
-    console.log("yt-dlp output:", stdout);
-    return res.json({
-      message: "✅ Download triggered",
-      output: stdout,
-      success:true,
+    // Get the most recently downloaded file
+    const files = fs.readdirSync(DOWNLOAD_DIR);
+    if (files.length === 0) {
+      return res.status(500).json({ error: "No file was downloaded." });
+    }
 
-
+    // Assuming only one file downloaded
+    const fileName = files[0];
+    const downloadUrl = `/video/${fileName}`;
+    res.json({
+      success: true,
+      message: "✅ Download complete",
+      filename: fileName,
+      downloadUrl: downloadUrl,
+      title: path.parse(fileName).name
     });
   });
 });
 
-// Debug endpoint to check yt-dlp
+// Serve downloaded videos
+app.use('/video', express.static(DOWNLOAD_DIR));
+
+// Check yt-dlp version
 app.get("/api/check-yt-dlp", (req, res) => {
   exec("yt-dlp --version", (err, stdout, stderr) => {
     if (err) return res.status(500).json({ error: "yt-dlp not found", details: stderr });
-    res.json({ version: stdout });
+    res.json({ version: stdout.trim() });
   });
 });
 
-app.get('/', async (req , res)=>{
-  res.send("server running")
-})
+// Health check
+app.get("/", (req, res) => {
+  res.send("✅ TikTok Downloader API is running.");
+});
 
-app.listen(3000, () => {
-  console.log("🚀 Server running on http://localhost:3000");
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
