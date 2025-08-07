@@ -58,16 +58,45 @@ app.post("/api/download-tiktok", (req, res) => {
   });
 });
 
-// Serve downloaded videos
-app.use('/video', express.static(DOWNLOAD_DIR));
+// // Serve downloaded videos
+// app.use('/video', express.static(DOWNLOAD_DIR));
 
-// Check yt-dlp version
-app.get("/api/check-yt-dlp", (req, res) => {
-  exec("yt-dlp --version", (err, stdout, stderr) => {
-    if (err) return res.status(500).json({ error: "yt-dlp not found", details: stderr });
-    res.json({ version: stdout.trim() });
+// // Check yt-dlp version
+// app.get("/api/check-yt-dlp", (req, res) => {
+
+//   exec("yt-dlp --version", (err, stdout, stderr) => {
+//     if (err) return res.status(500).json({ error: "yt-dlp not found", details: stderr });
+//     res.json({ version: stdout.trim() });
+//   });
+// });
+
+// Remove or comment out this:
+// app.use('/video', express.static(DOWNLOAD_DIR));
+
+// Instead, add this route to force download:
+
+app.get('/video/:filename', (req, res) => {
+  const filename = req.params.filename;
+  
+  // Security: sanitize filename to avoid directory traversal
+  const safeFilename = path.basename(filename);
+  const filePath = path.join(DOWNLOAD_DIR, safeFilename);
+
+  // Check if file exists
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('File not found');
+  }
+
+  // Use res.download to force download
+  res.download(filePath, safeFilename, (err) => {
+    if (err) {
+      console.error('Error sending file:', err);
+      res.status(500).send('Server error');
+    }
   });
 });
+
+
 
 // Health check
 app.get("/", (req, res) => {
