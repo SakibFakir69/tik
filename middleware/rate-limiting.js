@@ -7,3 +7,6 @@ export const limiter = rateLimit({
   legacyHeaders: false,       // Disable the X-RateLimit-* headers
   message: "Too many requests, please try again later.", // Optional custom message
 });
+
+
+module.exports={limiter};
