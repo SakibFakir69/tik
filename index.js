@@ -3,14 +3,20 @@ const { exec } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const cors = require("cors");
+const { limiter } = require("./middleware/rate-limiting");
 
 const app = express();
 app.use(express.json());
 
 // CORS for local + Netlify
 app.use(cors({
-  origin: ["http://localhost:5173", "https://marvelous-dusk-b0bc58.netlify.app"]
+  origin: ["http://localhost:3000", "https://www.quicksavevid.com"]
 }));
+
+
+// limiter 
+app.use(limiter);
+
 
 const DOWNLOAD_DIR = path.join(__dirname, "downloads");
 if (!fs.existsSync(DOWNLOAD_DIR)) {
