@@ -1,11 +1,16 @@
+require("dotenv").config();
 const express = require("express");
 const { exec } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const cors = require("cors");
+const mongoess = require("mongoose")
+
 
 
 const { limiter } = require("./middleware/rate-limiting");
+const { Count } = require("./model/model.count");
+const { count } = require("console");
 
 const app = express();
 app.use(express.json());
@@ -20,6 +25,45 @@ app.use(cors({
 app.use(limiter);
 
 
+
+const url = process.env.DB_URL ;
+
+if (!url) {
+  throw new Error("invalid ")
+}
+
+(
+  async () => {
+
+
+    try {
+
+      await mongoess.connect(url);
+      console.log("conected")
+
+
+    } catch (error) {
+
+      console.log(error)
+
+    }
+
+
+
+  }
+)()
+
+// iife
+
+
+
+
+
+
+
+
+
+
 const DOWNLOAD_DIR = path.join(__dirname, "downloads");
 if (!fs.existsSync(DOWNLOAD_DIR)) {
   fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
@@ -32,6 +76,45 @@ function sanitizeFilename(name) {
     .replace(/[^\w\-]+/g, '_')          // Replace non-word chars except dash with underscore
     .substring(0, 100);                 // Limit length to 100 chars
 }
+
+
+
+// download count
+
+app.post('/counter', async (req, res) => {
+
+
+  try {
+
+    const counter = await new Count.findOneAndUpdate({}, { $inc: { count: 1 } }, { new: true });
+
+
+    return res.status(201).json({
+      status: true,
+      count: counter,
+      message: "count updated"
+    })
+
+
+
+
+
+
+
+
+  } catch (error) {
+
+    return res.status(500).json({
+      status: false,
+      message: "Faild to update"
+    })
+
+  }
+
+})
+
+
+
 
 // TikTok download endpoint
 app.post("/api/download-tiktok", (req, res) => {
