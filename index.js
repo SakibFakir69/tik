@@ -9,15 +9,17 @@ const mongoess = require("mongoose")
 
 
 const { limiter } = require("./middleware/rate-limiting");
-const { Count } = require("./model/model.count");
-const { count } = require("console");
+const {Count} = require("./model/model.count")
+
+
+
 
 const app = express();
 app.use(express.json());
 
 // CORS for local + Netlify
 app.use(cors({
-  origin: ["http://localhost:3000", "https://www.quicksavevid.com"]
+  origin: ["http://localhost:3000", "https://www.quicksavevid.com","http://localhost:3001"]
 }));
 
 
@@ -81,38 +83,33 @@ function sanitizeFilename(name) {
 
 // download count
 
-app.post('/counter', async (req, res) => {
-
-
+app.post("/api/counter", async (req, res) => {
   try {
+    let counter = await Count.findOne({});
 
-    const counter = await new Count.findOneAndUpdate({}, { $inc: { count: 1 } }, { new: true });
+    if (!counter) {
+      // Create a new counter if it doesn't exist
+      counter = new Count({ count: 1 });
+    } else {
+      // Increment existing counter
+      counter.count += 1;
+    }
 
+    await counter.save();
 
-    return res.status(201).json({
+    res.status(201).json({
       status: true,
-      count: counter,
-      message: "count updated"
-    })
-
-
-
-
-
-
-
-
+      count: counter.count,
+      message: "Count updated",
+    });
   } catch (error) {
-
-    return res.status(500).json({
+    console.error(error);
+    res.status(500).json({
       status: false,
-      message: "Faild to update"
-    })
-
+      message: "Failed to update count",
+    });
   }
-
-})
-
+});
 
 
 

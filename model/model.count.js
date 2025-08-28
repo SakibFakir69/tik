@@ -9,4 +9,4 @@ const countSchema = new mongoose.Schema({
  const Count = mongoose.model("count", countSchema)
 
 
- module.exports=Count;
+ module.exports={Count}
