@@ -112,6 +112,29 @@ app.post("/api/counter", async (req, res) => {
 });
 
 
+// get counter 
+
+app.get('/counter', async(req , res)=>{
+  try {
+    const count = await Count.findOne()
+
+    return res.status(200).json({
+      status:true,
+      message:"Count Fetched",
+      count:count.count
+    })
+    
+  } catch (error) {
+
+    return res.status(500).json({
+      status:false,
+      message:error.message,
+      error:error.stack
+    })
+    
+  }
+})
+
 
 // TikTok download endpoint
 app.post("/api/download-tiktok", (req, res) => {
