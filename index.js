@@ -94,6 +94,7 @@ app.post("/api/counter", async (req, res) => {
       // Increment existing counter
       counter.count += 1;
     }
+    console.log(counter);
 
     await counter.save();
 
@@ -116,7 +117,8 @@ app.post("/api/counter", async (req, res) => {
 
 app.get('/counter', async(req , res)=>{
   try {
-    const count = await Count.findOne()
+    const count = await Count.findOne();
+    console.log(count);
 
     return res.status(200).json({
       status:true,
