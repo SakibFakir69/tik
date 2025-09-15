@@ -33,7 +33,6 @@ const url = process.env.DB_URL ;
 if (!url) {
   throw new Error("invalid ")
 }
-
 (
   async () => {
 
