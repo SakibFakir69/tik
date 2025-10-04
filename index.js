@@ -14,8 +14,8 @@ const {Count} = require("./model/model.count")
 
 
 
-const app = express();
-app.use(express.json());
+const app = express()
+app.use(express.json())
 
 // CORS for local + Netlify
 app.use(cors({
@@ -55,7 +55,7 @@ if (!url) {
 )()
 
 
-
+// om
 
 
 
