@@ -19,9 +19,16 @@ app.use(express.json())
 
 // CORS for local + Netlify
 app.use(cors({
-  origin: ["http://localhost:3000", "https://www.quicksavevid.com","http://localhost:3001"]
+  origin: [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://www.quicksavevid.com",
+    "https://quick-save-ui-nine.vercel.app"
+  ],
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+  credentials: true
 }));
-
 
 // limiter 
 app.use(limiter);
