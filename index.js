@@ -15,6 +15,7 @@ const {Count} = require("./model/model.count")
 
 
 const app = express()
+app.set('trust proxy', 1); // ← add this line
 app.use(express.json())
 
 // CORS for local + Netlify
