@@ -6,10 +6,13 @@ const fs = require("fs");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const { randomUUID: uuidv4 } = require("crypto");
-const pLimit = require("p-limit").default ?? require("p-limit");
-
 const { limiter } = require("./middleware/rate-limiting");
 const { Count } = require("./model/model.count");
+import { pLimit } from "./utils/plimit";
+
+const limit = pLimit(5); // max 5 concurrent
+
+
 
 const app = express();
 app.set("trust proxy", 1);

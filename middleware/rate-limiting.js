@@ -11,5 +11,20 @@ const limiter = rateLimit({
   message: "Too many requests, please try again later.", // Optional custom message
 });
 
+// ✅ No package needed
+export function pLimit(concurrency) {
+  let active = 0;
+  const queue = [];
+  const next = () => {
+    if (active >= concurrency || queue.length === 0) return;
+    active++;
+    const { fn, resolve, reject } = queue.shift();
+    fn().then(resolve).catch(reject).finally(() => { active--; next(); });
+  };
+  return (fn) => new Promise((resolve, reject) => {
+    queue.push({ fn, resolve, reject });
+    next();
+  });
+}
 
 module.exports={limiter};
