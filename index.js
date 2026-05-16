@@ -5,7 +5,7 @@ const path = require("path");
 const fs = require("fs");
 const cors = require("cors");
 const mongoose = require("mongoose");
-const { v4: uuidv4 } = require("uuid");
+const { randomUUID: uuidv4 } = require("crypto");
 const pLimit = require("p-limit").default ?? require("p-limit");
 
 const { limiter } = require("./middleware/rate-limiting");
