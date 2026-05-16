@@ -1,0 +1,164 @@
+require("dotenv").config();
+const express = require("express");
+const { execFile } = require("child_process");   // FIX: no shell
+const path = require("path");
+const fs = require("fs");
+const cors = require("cors");
+const mongoose = require("mongoose");             // FIX: correct spelling
+const { v4: uuidv4 } = require("uuid");           // NEW: per-request isolation
+const pLimit = require("p-limit");                // NEW: concurrency cap
+const { limiter } = require("./middleware/rate-limiting");
+const { Count } = require("./model/model.count");
+const app = express();
+app.set("trust proxy", 1);
+app.use(express.json());
+app.use(cors({
+  origin: [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://www.quicksavevid.com",
+    "https://quick-save-ui-nine.vercel.app",
+  ],
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+  credentials: true,
+}));
+app.use(limiter);
+const DB_URL = process.env.DB_URL;                // FIX: cleaner name
+if (!DB_URL) throw new Error("DB_URL env var required");
+(async () => {
+  try {
+    await mongoose.connect(DB_URL);
+    console.log("MongoDB connected");
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+    process.exit(1);                              // FIX: fail fast
+  }
+})();
+const DOWNLOAD_DIR = path.join(__dirname, "downloads");
+if (!fs.existsSync(DOWNLOAD_DIR)) {
+  fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
+}
+// NEW: global concurrency cap — max 3 yt-dlp at once
+const limit = pLimit(3);
+function sanitizeFilename(name) {
+  return name
+    .replace(/\.+/g, "_")
+    .replace(/[^\w\-]+/g, "_")
+    .substring(0, 100);
+}
+// NEW: isolated cleanup helper
+function cleanupDir(dirPath) {
+  try { fs.rmSync(dirPath, { recursive: true, force: true }); }
+  catch (err) { console.error("Cleanup error:", err.message); }
+}
+// NEW: fire-and-forget counter — never blocks downloads
+async function incrementCounter() {
+  try {
+    let counter = await Count.findOne({});
+    if (!counter) { counter = new Count({ count: 1 }); }
+    else { counter.count += 1; }
+    await counter.save();
+  } catch (err) {
+    console.error("Counter increment failed (non-fatal):", err.message);
+  }
+}
+app.post("/api/counter", async (req, res) => {
+  try {
+    let counter = await Count.findOne({});
+    if (!counter) { counter = new Count({ count: 1 }); }
+    else { counter.count += 1; }
+    await counter.save();
+    res.status(201).json({ status: true, count: counter.count, message: "Count updated" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ status: false, message: "Failed to update count" });
+  }
+});
+app.get("/counter", async (req, res) => {
+  try {
+    const counter = await Count.findOne();
+    if (!counter) return res.status(404).json({ status: false, message: "No count found" });
+    return res.status(200).json({ status: true, message: "Count fetched", count: counter.count });
+  } catch (err) {
+    return res.status(500).json({ status: false, message: err.message, error: err.stack });
+  }
+});
+app.post("/api/download-tiktok", async (req, res) => {
+  const { url } = req.body;
+  // FIX: stricter URL validation using URL parser
+  if (!url || typeof url !== "string") {
+    return res.status(400).json({ error: "URL is required." });
+  }
+  let parsed;
+  try { parsed = new URL(url); }
+  catch { return res.status(400).json({ error: "Invalid URL format." }); }
+  if (!parsed.hostname.endsWith("tiktok.com")) {
+    return res.status(400).json({ error: "Only TikTok URLs are supported." });
+  }
+  // FIX: per-request isolated directory — no more race condition
+  const jobId = uuidv4();
+  const jobDir = path.join(DOWNLOAD_DIR, jobId);
+  fs.mkdirSync(jobDir, { recursive: true });
+  const outTemplate = path.join(jobDir, "%(title)s.%(ext)s");
+  try {
+    await limit(() => new Promise((resolve, reject) => {
+      // FIX: execFile — no shell, no injection risk
+      execFile("yt-dlp",
+        ["-o", outTemplate, "--restrict-filenames", "--no-playlist", url],
+        { timeout: 60_000 },              // FIX: 60s hard timeout
+        (err, stdout, stderr) => {
+          if (err) reject(err); else resolve({ stdout, stderr });
+        }
+      );
+    }));
+  } catch (err) {
+    cleanupDir(jobDir);                   // FIX: clean up on failure
+    return res.status(500).json({ error: "Download failed.", details: err.message });
+  }
+  const files = fs.readdirSync(jobDir);
+  if (files.length === 0) {
+    cleanupDir(jobDir);
+    return res.status(500).json({ error: "No file was downloaded." });
+  }
+  const originalFile = files[0];
+  const ext = path.extname(originalFile);
+  const baseName = path.basename(originalFile, ext);
+  const safeBaseName = sanitizeFilename(baseName);
+  const safeFilename = safeBaseName + ext;
+  if (originalFile !== safeFilename) {
+    fs.renameSync(path.join(jobDir, originalFile), path.join(jobDir, safeFilename));
+  }
+  incrementCounter();                     // FIX: fire-and-forget, non-blocking
+  const downloadUrl = `/video/${jobId}/${encodeURIComponent(safeFilename)}`;
+  res.json({ success: true, message: "Download complete", filename: safeFilename, downloadUrl, title: safeBaseName });
+});
+// FIX: jobId segment prevents all files sharing one flat dir
+app.get("/video/:jobId/:filename", (req, res) => {
+  const { jobId, filename } = req.params;
+  const safeJobId = path.basename(jobId);
+  const safeFilename = path.basename(filename);
+  // FIX: UUID format guard
+  if (!/^[0-9a-f-]{36}$/.test(safeJobId)) {
+    return res.status(400).send("Invalid job ID");
+  }
+  const filePath = path.join(DOWNLOAD_DIR, safeJobId, safeFilename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send("File not found");
+  }
+  res.download(filePath, safeFilename, (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).send("Server error");
+    }
+    cleanupDir(path.join(DOWNLOAD_DIR, safeJobId)); // FIX: cleanup after delivery
+  });
+});
+// FIX: JSON health response with timestamp
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "TikTok Downloader API is running", timestamp: new Date().toISOString() });
+});
+// FIX: PORT from env with fallback
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
